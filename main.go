@@ -1,17 +1,18 @@
 package main
 
 import (
+	"encoding/base64"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
-	"path"
 	"strconv"
 	"strings"
-	"time"
+
+	"github.com/davecgh/go-spew/spew"
+	peer "github.com/libp2p/go-libp2p-peer"
 
 	config "github.com/ipfs/go-ipfs/repo/config"
-	fsrepo "github.com/ipfs/go-ipfs/repo/fsrepo"
+	ci "github.com/libp2p/go-libp2p-crypto"
 )
 
 var times = 0
@@ -19,33 +20,38 @@ var bitSize = 1024
 
 func generatePeerID(toMatch string, c chan bool) {
 	times = times + 1
-	now := time.Now()
-	directory := path.Join("/dev/shm", now.String())
-	if !fsrepo.IsInitialized(directory) {
-		cfg, err := config.Init(ioutil.Discard, bitSize)
-		if err != nil {
-			panic(err)
-		}
-		err = fsrepo.Init(directory, cfg)
-		if err != nil {
-			panic(err)
-		}
-	}
-	r, err := fsrepo.Open(directory)
-	defer r.Close()
-	conf, err := r.Config()
+
+	// TODO guard higher up
+	ident := config.Identity{}
+
+	sk, pk, err := ci.GenerateKeyPair(ci.RSA, bitSize)
 	if err != nil {
 		panic(err)
 	}
-	matches := strings.Contains(strings.ToLower(conf.Identity.PeerID), strings.ToLower(toMatch))
+
+	// currently storing key unencrypted. in the future we need to encrypt it.
+	// TODO(security)
+	skbytes, err := sk.Bytes()
+	if err != nil {
+		panic(err)
+	}
+	ident.PrivKey = base64.StdEncoding.EncodeToString(skbytes)
+
+	id, err := peer.IDFromPublicKey(pk)
+	if err != nil {
+		panic(err)
+	}
+	ident.PeerID = id.Pretty()
+
+	matches := strings.Contains(strings.ToLower(ident.PeerID), strings.ToLower(toMatch))
 	if matches {
-		fmt.Println(conf.Identity.PeerID + " matched! " + directory)
+		fmt.Println(ident.PeerID + " matched! ")
+		spew.Dump(ident)
 		c <- true
 	} else {
 		timeStr := strconv.Itoa(times)
-		fmt.Println(timeStr + " " + conf.Identity.PeerID + " did not match...")
+		fmt.Println(timeStr + " " + ident.PeerID + " did not match...")
 		c <- false
-		err = os.RemoveAll(directory)
 		if err != nil {
 			panic(err)
 		}
