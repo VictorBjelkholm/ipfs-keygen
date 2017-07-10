@@ -7,9 +7,11 @@
 
 ## Usage
 
-### `ipfs-keygen <search-term>`
+### `ipfs-keygen -match <search-term>`
 
 Tries to find keys that matches the search-term in a case-insensitive way.
+
+Defaults to using `ipfs` as the search-term
 
 ## License
 
