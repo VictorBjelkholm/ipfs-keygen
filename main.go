@@ -9,9 +9,9 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"regexp"
 	"runtime"
 	"strconv"
-	"strings"
 	"time"
 
 	peer "github.com/libp2p/go-libp2p-peer"
@@ -41,15 +41,17 @@ func saveIdentity(conf config.Identity) error {
 }
 
 func try(ctx context.Context, toMatch string, n int, successes chan<- config.Identity) {
+	var re = regexp.MustCompile("(?i)" + toMatch)
 	for i := 0; i < n; i++ {
-		fmt.Println("Starting")
+		fmt.Println("Starting worker")
 		go func() {
 			for {
 				conf, err := generatePeerID(toMatch)
 				if err != nil {
 					continue
 				}
-				matches := strings.Contains(strings.ToLower(conf.PeerID), strings.ToLower(toMatch))
+				matches := re.Match([]byte(conf.PeerID))
+				// matches := strings.Contains(strings.ToLower(conf.PeerID), strings.ToLower(toMatch))
 				if matches {
 					successes <- conf
 				}
@@ -70,8 +72,8 @@ func generatePeerID(toMatch string) (config.Identity, error) {
 	// TODO guard higher up
 	ident := config.Identity{}
 
-	sk, pk, err := ci.GenerateKeyPair(ci.RSA, bitSize)
-	// sk, pk, err := ci.GenerateKeyPair(ci.Secp256k1, bitSize)
+	sk, pk, err := ci.GenerateKeyPair(ci.Ed25519, bitSize)
+	// sk, pk, err := ci.GenerateKeyPair(ci.RSA, bitSize)
 	if err != nil {
 		return ident, err
 	}
@@ -120,7 +122,6 @@ func start(toMatch string, workers int) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	successes := make(chan config.Identity)
-	fmt.Println(workers)
 	go try(ctx, toMatch, workers, successes)
 
 	c := make(chan os.Signal, 1)
